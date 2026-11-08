@@ -1,0 +1,166 @@
+name: MaksFS Windows packages
+
+on:
+  push:
+    branches: [maksfs-main]
+    paths:
+      - '.github/workflows/maksfs-package-windows.yml'
+      - 'ci/packaging/**'
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Existing packaging-inputs run ID; blank selects the newest snapshot (compiles only if none exists)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: maksfs-windows-packages
+  cancel-in-progress: false
+
+jobs:
+  packages:
+    runs-on: windows-2022
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      AUTOBUILD_VSVER: '170'
+      AUTOBUILD_ADDRSIZE: '64'
+      AUTOBUILD_WIN_CMAKE_GEN: Visual Studio 17 2022
+      AUTOBUILD_WIN_VSPLATFORM: x64
+      AUTOBUILD_BUILD_ID: ${{ github.run_number }}
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '1'
+      _CL_: /MP2
+    steps:
+      - name: Checkout packaging source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Select reusable build snapshot before considering compilation
+        id: snapshot
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_RUN: ${{ inputs.source_run_id }}
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            let artifacts;
+            if (process.env.REQUESTED_RUN) {
+              const run_id = Number(process.env.REQUESTED_RUN);
+              if (!Number.isSafeInteger(run_id) || run_id <= 0) throw new Error('Invalid run ID');
+              const run = (await github.rest.actions.getWorkflowRun({owner, repo, run_id})).data;
+              if (run.head_branch !== 'maksfs-main') throw new Error('Snapshot must be from maksfs-main');
+              artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,{owner,repo,run_id,per_page:100});
+            } else {
+              artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo,{owner,repo,per_page:100});
+            }
+            const selected = artifacts.filter(a => !a.expired && a.name.startsWith('maksfs-packaging-inputs-') &&
+              a.workflow_run?.head_branch === 'maksfs-main').sort((a,b)=>b.id-a.id)[0];
+            if (!selected && process.env.REQUESTED_RUN) throw new Error('Requested snapshot is missing/expired; refusing to compile');
+            core.setOutput('run_id', selected?.workflow_run.id || '');
+            core.setOutput('name', selected?.name || '');
+            await core.summary.addRaw(selected ? `Reusing binaries from run ${selected.workflow_run.id}. No compilation.` :
+              'Recovery compile required: successful run #2 saved diagnostics only; no reusable binary snapshot exists.').write();
+
+      - name: Create log directory
+        run: New-Item -ItemType Directory ci-logs -Force | Out-Null
+
+      - name: Select Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.9'
+          architecture: x64
+
+      - name: Prepare proven build tools
+        if: steps.snapshot.outputs.run_id == ''
+        run: ./ci/prepare-windows.ps1
+      - name: Verify proven build tools
+        if: steps.snapshot.outputs.run_id == ''
+        run: ./ci/verify-windows.ps1
+      - name: Configure unchanged open profile
+        if: steps.snapshot.outputs.run_id == ''
+        run: |
+          & cmd.exe /d /c ci\windows-build.cmd configure 2>&1 | Tee-Object ci-logs/configure.log
+          if ($LASTEXITCODE -ne 0) { throw "Configuration failed: $LASTEXITCODE" }
+          ./ci/check-open-profile.ps1 -CachePath build-vc170-64/CMakeCache.txt
+      - name: Recover binaries once using successful compiler settings
+        if: steps.snapshot.outputs.run_id == ''
+        timeout-minutes: 100
+        run: |
+          & cmd.exe /d /c ci\windows-build.cmd compile 2>&1 | Tee-Object ci-logs/compile.log
+          if ($LASTEXITCODE -ne 0) { throw "Compilation failed: $LASTEXITCODE" }
+      - name: Archive packaging inputs before attempting packaging
+        if: steps.snapshot.outputs.run_id == ''
+        run: python ci/packaging/snapshot.py
+      - name: Preserve reusable inputs
+        if: steps.snapshot.outputs.run_id == ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: maksfs-packaging-inputs-${{ github.run_id }}
+          path: ci-snapshot/packaging-inputs.zip
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Download selected previous inputs
+        if: steps.snapshot.outputs.run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.snapshot.outputs.name }}
+          run-id: ${{ steps.snapshot.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ci-snapshot
+      - name: Restore inputs and their provenance
+        run: |
+          python -m zipfile -e ci-snapshot/packaging-inputs.zip .
+          if ($LASTEXITCODE -ne 0) { throw 'Snapshot extraction failed' }
+          ./ci/check-open-profile.ps1 -CachePath build-vc170-64/CMakeCache.txt
+      - name: Install pinned packaging Python tools
+        if: steps.snapshot.outputs.run_id != ''
+        run: |
+          python -m venv "$env:RUNNER_TEMP/maksfs-tools"
+          & "$env:RUNNER_TEMP/maksfs-tools/Scripts/python.exe" -m pip install --require-hashes --only-binary=:all: -r ci/windows-tools.lock
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging tools failed' }
+          "MAKSFS_PYTHON=$env:RUNNER_TEMP/maksfs-tools/Scripts/python.exe" >> $env:GITHUB_ENV
+      - name: Install NSIS packaging tool
+        run: |
+          choco install nsis --version=3.11 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+      - name: Stage full upstream distribution without recompilation
+        run: |
+          & $env:MAKSFS_PYTHON ci/packaging/stage.py 2>&1 | Tee-Object ci-logs/stage.log
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution staging failed' }
+      - name: Validate dependencies and build installer and portable ZIP
+        run: |
+          python ci/packaging/package.py 2>&1 | Tee-Object ci-logs/package.log
+          if ($LASTEXITCODE -ne 0) { throw 'Package validation/build failed' }
+      - name: Test installer file hashes and safe uninstall
+        run: ./ci/packaging/test-installer.ps1
+      - name: Save verified Windows packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MaksFS-Windows-x64-packages-${{ github.run_id }}
+          path: dist/
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+      - name: Save diagnostic checkpoint
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: maksfs-packaging-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          path: |
+            ci-logs/
+            dist/*.json
+            dist/*.txt
+            packaging-inputs.json
+            build-vc170-64/CMakeCache.txt
+            package-work/MaksFS.nsi
