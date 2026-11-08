@@ -6,7 +6,10 @@ if not defined MAKSFS_PYTHON exit /b 2
 if not defined AUTOBUILD_VARIABLES_FILE exit /b 2
 for %%I in ("%MAKSFS_PYTHON%") do set "PATH=%%~dpI;C:\cygwin64\bin;%PATH%"
 set "PYTHON=%MAKSFS_PYTHON%"
-for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "MAKSFS_VS=%%I"
+set "MAKSFS_VS="
+"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > "%RUNNER_TEMP%\maksfs-vs-path.txt"
+if errorlevel 1 exit /b 2
+for /f "usebackq delims=" %%I in ("%RUNNER_TEMP%\maksfs-vs-path.txt") do set "MAKSFS_VS=%%I"
 if not defined MAKSFS_VS exit /b 2
 call "%MAKSFS_VS%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
 if errorlevel 1 exit /b 2
