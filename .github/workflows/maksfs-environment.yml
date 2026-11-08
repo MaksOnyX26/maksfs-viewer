@@ -1,0 +1,67 @@
+name: MaksFS environment inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: maksfs-environment
+  cancel-in-progress: false
+jobs:
+  inventory:
+    if: github.ref == 'refs/heads/maksfs-main'
+    runs-on: windows-2022
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Inventory only - no installation or build
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $report = [System.Collections.Generic.List[string]]::new()
+          $report.Add('# MaksFS Windows environment inventory')
+          $report.Add('Inventory only. Success does not mean the build environment is ready.')
+          $report.Add("Runner image: $env:ImageOS / $env:ImageVersion")
+          function Record-Tool($name, $arguments) {
+            $command = Get-Command $name -ErrorAction SilentlyContinue
+            if (!$command) {
+              $report.Add("- MISSING: $name")
+              Write-Warning "$name is not available"
+              return
+            }
+            $output = & $command.Source @arguments 2>&1
+            $code = $LASTEXITCODE
+            $report.Add("- $name (exit $code): $($output -join ' ')")
+          }
+          Record-Tool 'git' @('--version')
+          Record-Tool 'cmake' @('--version')
+          Record-Tool 'python' @('--version')
+          Record-Tool 'python' @('-m', 'pip', '--version')
+          Record-Tool 'python' @('-c', 'import importlib.metadata as m; print({n: next((d.version for d in m.distributions() if d.metadata["Name"].lower() == n), "MISSING") for n in ["autobuild", "llbase", "llsd"]})')
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path -LiteralPath $vswhere) {
+            $vs = & $vswhere -products '*' -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json
+            $report.Add('## Visual Studio 2022 with C++ tools')
+            $report.Add($vs -join "`n")
+          } else {
+            $report.Add('- MISSING: vswhere / VS2022 detection')
+          }
+          $sdk = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+          $report.Add('## Windows SDK include versions')
+          if (Test-Path -LiteralPath $sdk) {
+            $report.Add(((Get-ChildItem -LiteralPath $sdk -Directory).Name -join ', '))
+          } else { $report.Add('MISSING: Windows SDK') }
+          foreach ($tool in @('C:\cygwin64\bin\bash.exe', 'C:\cygwin64\bin\patch.exe', 'C:\Program Files (x86)\NSIS\makensis.exe')) {
+            if (Test-Path -LiteralPath $tool) {
+              $report.Add("- Present: $tool")
+            } else { $report.Add("- MISSING at standard location: $tool") }
+          }
+          $os = Get-CimInstance Win32_OperatingSystem
+          $report.Add("OS: $($os.Caption); architecture: $($os.OSArchitecture)")
+          $report.Add("RAM GiB: $([math]::Round($os.TotalVisibleMemorySize / 1MB, 1))")
+          $report.Add("Free disk GiB: $([math]::Round((Get-PSDrive C).Free / 1GB, 1))")
+          $report.Add('## Required review before any build')
+          $report.Add('Check CMake >= 4.1.2, Python 3, autobuild >= 3.8, VS2022 C++, Windows SDK and Cygwin/patch. Pin Python packages and fs-build-variables. Confirm library licenses and a separate build budget.')
+          $report.Add('No source checkout, dependency installation, configuration, compilation or packaging was performed.')
+          $report | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
+

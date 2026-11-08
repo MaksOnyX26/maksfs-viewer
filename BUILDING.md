@@ -1,0 +1,53 @@
+# MaksFS: подготовка Windows x64
+
+## Зафиксированная основа
+
+Проверено 2026-11-08: официальный тег `Firestorm_Release_7.2.5.81788` и ветка `Firestorm_7.2.5` указывают на `4ac201fdc56127de27de34567286885f4e75d194`. GitHub Releases у upstream пуст; подтверждение основы — официальный Git-тег. Это не проверка воспроизводимости опубликованного бинарника.
+
+Используйте [инструкцию именно этой версии](https://github.com/FirestormViewer/phoenix-firestorm/blob/4ac201fdc56127de27de34567286885f4e75d194/doc/building_windows.md), а не master. Локальная копия: [doc/building_windows.md](doc/building_windows.md).
+
+## Требования релиза
+
+- Windows 10/11 x64; сборки x86 больше не поддерживаются.
+- Visual Studio 2022, workload Desktop development with C++, инструменты MSVC x64/x86 и Windows SDK. `AUTOBUILD_VSVER=170`.
+- Git for Windows, без автоматического преобразования окончаний строк.
+- CMake не ниже 4.1.2.
+- Python 3 и pip; upstream CI выбирает Python 3.11.
+- Cygwin x64 с patch; порядок PATH имеет значение.
+- Autobuild не ниже 3.8, llbase и llsd. В этом релизе requirements.txt **не фиксирует версии**. До сборки нужен проверенный набор версий; установка самого свежего autobuild из Git не обеспечивает воспроизводимость.
+- Отдельный репозиторий https://github.com/FirestormViewer/fs-build-variables и `AUTOBUILD_VARIABLES_FILE`, указывающий на его файл variables. Его коммит также нужно зафиксировать перед сборкой.
+- NSIS нужен для установщика. Проверка окружения не устанавливает его.
+- Настоящие configure/build выполнять через cmd.exe согласно upstream; PowerShell ниже используется только для инвентаризации.
+
+Исходники можно получить без сборки:
+
+```cmd
+git clone --branch maksfs-main https://github.com/MaksOnyX26/maksfs-viewer.git
+cd maksfs-viewer
+git remote add upstream https://github.com/FirestormViewer/phoenix-firestorm.git
+git remote -v
+```
+
+Обычный clone сохраняет доступную историю. Не используйте orphan-ветку, squash истории или force push для замены основы.
+
+## Библиотеки и будущая сборка
+
+Начальный кандидат — `ReleaseFS_open`, архитектура 64: без KDU и FMOD, без OpenSim. По инструкции upstream без FMOD нет звука; такую сборку нельзя объявлять полностью равной официальному Firestorm. Kakadu/KDU, Havok и FMOD требуют отдельной проверки прав и подготовки. Не использовать закрытые пакеты или секреты Firestorm.
+
+Даже `autobuild configure` может загрузить большой комплект зависимостей. Поэтому сейчас не запускаются configure, build, package или upstream build scripts. Перед первой компиляцией согласовать расходы/машину, закрепить зависимости и проверить профиль, затем отдельно разрешить сборку. Успешный отчёт CI сам по себе этого не разрешает.
+
+## Ручная проверка GitHub Actions
+
+Файл: [.github/workflows/maksfs-environment.yml](.github/workflows/maksfs-environment.yml).
+
+- Только workflow_dispatch, только maksfs-main, одна машина windows-2022, лимит 5 минут, без матрицы.
+- Только чтение; нет checkout, внешних actions, секретов, установки пакетов, кэшей, артефактов, компиляции и публикации.
+- Собирает версии Git/CMake/Python, сведения о VS2022 C++, Windows SDK, Cygwin/patch, NSIS и Python-пакетах; память и свободное место.
+- Пробелы в окружении отмечаются предупреждениями. Зелёный статус означает завершённую инвентаризацию, **не готовность к сборке**.
+- windows-2022 — обновляемый образ Windows Server, не зафиксированная среда Windows 10/11. Версии из отчёта нужно проверить и закрепить.
+- Workflow подготовлен, но в рамках этой работы не запущен.
+
+GitHub требует наличия workflow_dispatch-файла на default branch для ручного запуска. Сейчас default branch остаётся master; новый файл существует только в maksfs-main. Поэтому кнопка запуска может быть недоступна. Следующий отдельный шаг — выбрать maksfs-main основной веткой либо согласовать безопасную регистрацию этого workflow на default branch. Не запускайте вместо него унаследованный Build Viewer.
+
+Все 13 унаследованных YAML workflow в maksfs-main переименованы в `.disabled` без изменения содержимого: они включают сборку, расписания, публикацию и инфраструктуру upstream. Это обратимо и относится только к новой ветке. master и настройки Actions репозитория не изменены; перед включением Actions или сменой default branch нужно проверить workflow на выбранной основной ветке.
+

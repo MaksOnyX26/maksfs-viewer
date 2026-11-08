@@ -1,36 +1,27 @@
-<img align="left" width="100" height="100" src="doc/firestorm_256.png" alt="Logo of Firestorm viewer"/>
+# MaksFS
 
-**[Firestorm](https://www.firestormviewer.org) is a free client for 3D virtual worlds such as Second Life and various OpenSim worlds where users can create, connect and chat with others from around the world.**
+Экспериментальный fork Firestorm для Second Life с целью снизить нагрузку на компьютер и улучшить плавность работы. Улучшения производительности пока не реализованы и не измерены. Готовых сборок MaksFS пока нет.
 
-This repository contains the official source code for the Firestorm viewer.
+## Основа
 
-## Open Source
+- Upstream: https://github.com/FirestormViewer/phoenix-firestorm
+- Рабочая ветка: `maksfs-main`; исходная релизная ветка: `Firestorm_7.2.5`.
+- Подтверждённый официальный тег: [Firestorm_Release_7.2.5.81788](https://github.com/FirestormViewer/phoenix-firestorm/tree/Firestorm_Release_7.2.5.81788).
+- Базовый коммит: `4ac201fdc56127de27de34567286885f4e75d194`.
+- Проверено 2026-11-08: upstream-ветка, релизный тег и ветка fork совпадают. Ветка создана от этого коммита, не от master.
+- История upstream сохранена. Оригинальный README без изменений: [README.upstream.md](README.upstream.md).
 
-Firestorm is a third party viewer derived from the official [Second Life](https://github.com/secondlife/viewer) client. The client codebase has been open source since 2007 and is available under the LGPL license.
+MaksFS — самостоятельный эксперимент, не официальный выпуск Firestorm и не продукт Linden Lab.
 
-## Download
+## Начало работы
 
-Pre-built versions of the viewer releases for Windows, Mac and Linux can be downloaded from the [official website](https://www.firestormviewer.org/choose-your-platform/).
+[План](ROADMAP.md) · [Подготовка Windows и ограничения CI](BUILDING.md)
 
-## Build Instructions
+На этом этапе меняются только документация и организация CI. Компиляция, загрузка библиотек, создание установщика и публикация требуют отдельного решения.
 
-Build instructions for each operating system can be found using the links below and in the official [wiki](https://wiki.firestormviewer.org).
+## Лицензии и атрибуция
 
-- [Windows](doc/building_windows.md)
-- [Mac](doc/building_macos.md)
-- [Linux](doc/building_linux.md)
+Сохранены [LICENSE](LICENSE), [лицензия исходников](doc/LICENSE-source.txt), [LGPL 2.1](doc/LGPL-license.txt), [правила для логотипов](doc/LICENSE-logos.txt), [заголовок Firestorm](FIRESTORM-SOURCE_LICENSE_HEADER.txt) и авторство исходных файлов. Заголовок Firestorm указывает LGPL **2.1 only**; отдельные файлы и зависимости могут иметь другие условия.
 
-> [!NOTE]
-> We do not provide support for compiling the viewer or issues resulting from using a self-compiled viewer. However, there is a self-compilers group within Second Life that can be joined to ask questions related to compiling the viewer: [Firestorm Self Compilers](https://tinyurl.com/firestorm-self-compilers)
+При изменении и распространении нужно сохранять уведомления, отмечать изменения и выполнять применимые требования LGPL к исходникам и возможности перелинковки. Лицензия исходников не заменяет лицензии сторонних SDK и правила использования товарных знаков. Перед выпуском требуется отдельная проверка комплекта библиотек, брендинга и [Second Life Third-Party Viewer Policy](https://secondlife.com/corporate/third-party-viewers).
 
-## Contribute
-
-Help make Firestorm better! You can get involved with improvements by filing bugs and suggesting enhancements via [JIRA](https://jira.firestormviewer.org) or [creating pull requests](CONTRIBUTING.md).
-
-## Community respect
-
-This section is guided by the [TPV Policy](https://secondlife.com/corporate/third-party-viewers) and the [Second Life Code of Conduct](https://github.com/secondlife/viewer?tab=coc-ov-file).
-
-Firestorm code is made available during ongoing development, with the **master** branch representing the current nightly build. Developers and self-compilers are encouraged to work on their own forks and contribute back via pull requests, as detailed in the [contributing guide](CONTRIBUTING.md).
-
-If you intend to use our code for your own viewer beyond personal use, please only use code from official release branches (for example, `Firestorm_7.1.13`), rather than from pre-release/preview or nightly builds.
