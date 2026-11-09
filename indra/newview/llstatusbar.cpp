@@ -29,6 +29,8 @@
 
 #include "llstatusbar.h"
 
+#include <ctime>
+
 // viewer includes
 #include "llagent.h"
 #include "llagentcamera.h"
@@ -180,6 +182,7 @@ private:
 LLStatusBar::LLStatusBar(const LLRect& rect)
 :   LLPanel(),
     mTextTime(NULL),
+    mTextLocalTime(nullptr),
     mSGBandwidth(NULL),
     mSGPacketLoss(NULL),
     mBandwidthButton(NULL), // <FS:PP> FIRE-6287: Clicking on traffic indicator toggles Lag Meter window
@@ -491,6 +494,12 @@ bool LLStatusBar::postBuild()
     mBuyParcelBtn->setClickedCallback(boost::bind(&LLStatusBar::onBuyLandClicked, this));
 
     mTimeMediaPanel = getChild<LLPanel>("time_and_media_bg");
+    mTextLocalTime = getChild<LLTextBox>("LocalTimeText");
+    // Derive placement from the resolved skin/language layout, including SLT width.
+    LLRect local_time_rect = mTextTime->getRect();
+    local_time_rect.mLeft = local_time_rect.mRight + 4;
+    local_time_rect.mRight = local_time_rect.mLeft + mTextLocalTime->getRect().getWidth();
+    mTextLocalTime->setRect(local_time_rect);
 
     // <FS:Beq> Make FPS a clickable button with contextual colour
     // mFPSText = getChild<LLButton>("FPSText");
@@ -556,6 +565,7 @@ bool LLStatusBar::postBuild()
     mClockFormatChoices["Language"] = getString("time");
 
     mClockFormat = gSavedSettings.getString("FSStatusBarTimeFormat");
+    onShowLocalTimeChanged(gSavedSettings.getBOOL("MaksFSShowLocalTime"));
     // </FS:Zi>
 
     return true;
@@ -569,7 +579,10 @@ void LLStatusBar::updateClockDisplay()
     time_t utc_time;
     utc_time = time_corrected();
 
-    std::string timeStr = mClockFormatChoices[mClockFormat];
+    // A stale or manually edited setting must not leave the SLT clock blank.
+    const auto format = mClockFormatChoices.find(mClockFormat);
+    std::string timeStr = (format != mClockFormatChoices.end())
+        ? format->second : mClockFormatChoices.at("Language");
     LLSD substitution;
     substitution["datetime"] = (S32) utc_time;
     LLStringUtil::format (timeStr, substitution);
@@ -583,6 +596,78 @@ void LLStatusBar::updateClockDisplay()
     mTextTime->setToolTip (dtStr);
 }
 // </FS:Zi>
+
+// <FS:MaksFS> Optional system local time alongside SLT.
+void LLStatusBar::updateLocalClockDisplay()
+{
+    if (!mShowLocalTime)
+    {
+        return;
+    }
+
+    // Use the OS wall clock, without the simulator's SLT clock correction.
+    // Reuse the existing one-second tick, formatting only when the minute changes.
+    const time_t now = std::time(nullptr);
+    const time_t minute = now / 60;
+    if (minute == mLocalTimeMinute)
+    {
+        return;
+    }
+    std::tm local_time{};
+#if LL_WINDOWS
+    if (localtime_s(&local_time, &now) != 0)
+#else
+    if (localtime_r(&now, &local_time) == nullptr)
+#endif
+    {
+        return;
+    }
+
+    char clock[16]{};
+    char date[64]{};
+    // Numeric UTC offset is unambiguous during DST and avoids locale-specific
+    // timezone names in the platform's legacy encoding on Windows.
+    if (std::strftime(clock, sizeof(clock), "%H:%M", &local_time) == 0 ||
+        std::strftime(date, sizeof(date), "%Y-%m-%d %H:%M (UTC%z)", &local_time) == 0)
+    {
+        return;
+    }
+    mTextLocalTime->setText(clock);
+    LLStringUtil::format_map_t args;
+    args["[TIME]"] = date;
+    mTextLocalTime->setToolTip(getString("localTimeTooltip", args));
+    mLocalTimeMinute = minute;
+}
+
+void LLStatusBar::onShowLocalTimeChanged(bool show)
+{
+    if (show == mShowLocalTime)
+    {
+        return;
+    }
+    // Keep the right edge and media controls fixed; reclaim space when hidden.
+    const S32 shift = (mTextLocalTime->getRect().getWidth() + 4) * (show ? 1 : -1);
+    for (LLView* child : *mTimeMediaPanel->getChildList())
+    {
+        if (child != mTextLocalTime && child->getRect().mLeft >= mTextTime->getRect().mRight)
+        {
+            child->translate(shift, 0);
+        }
+    }
+    LLRect rect = mTimeMediaPanel->getRect();
+    rect.mLeft -= shift;
+    mTimeMediaPanel->setRect(rect);
+    mBalancePanel->translate(-shift, 0);
+    mShowLocalTime = show;
+    mTextLocalTime->setVisible(show && mTextTime->getVisible());
+    mLocalTimeMinute = -1;
+    updateLocalClockDisplay();
+    updateMenuSearchPosition();
+    updateOmnifilterPanelPosition();
+    update();
+}
+
+// </FS:MaksFS>
 
 // Per-frame updates of visibility
 void LLStatusBar::refresh()
@@ -693,6 +778,7 @@ void LLStatusBar::refresh()
         // mTextTime->setToolTip (dtStr);
 
         updateClockDisplay();
+        updateLocalClockDisplay();
         // </FS:Zi>
     }
 
@@ -803,6 +889,7 @@ void LLStatusBar::refresh()
 void LLStatusBar::setVisibleForMouselook(bool visible)
 {
     mTextTime->setVisible(visible);
+    mTextLocalTime->setVisible(visible && mShowLocalTime);
     mBalancePanel->setVisible(visible && gSavedSettings.getBOOL("FSShowCurrencyBalanceInStatusbar"));
     mBoxBalance->setVisible(visible);
     // <FS:PP> Option to hide volume controls (sounds, media, stream) in upper right

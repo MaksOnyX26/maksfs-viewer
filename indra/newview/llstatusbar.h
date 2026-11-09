@@ -29,6 +29,8 @@
 
 #include "llpanel.h"
 
+#include <ctime>
+
 // <FS:Ansariel> Pathfinding support
 #include "llpathfindingnavmesh.h"
 
@@ -160,6 +162,7 @@ public:
 
     // <FS:Zi> FIRE-20390, FIRE-4269 - Option for 12/24 hour clock and seconds display
     void onTimeFormatChanged(const std::string& format);
+    void onShowLocalTimeChanged(bool show);
 
 private:
 
@@ -323,6 +326,11 @@ public:
 
 private:
     LLTextBox   *mTextTime;
+    // <FS:MaksFS> System local clock, independent of the simulator clock.
+    LLTextBox   *mTextLocalTime;
+    bool        mShowLocalTime = false;
+    std::time_t mLocalTimeMinute = -1;
+    // </FS:MaksFS>
     LLTextBox   *mFPSText; // <FS:Ansariel> FIRE-14482: Show FPS in status bar
 
     LLStatGraph *mSGBandwidth;
@@ -400,6 +408,7 @@ private:
     std::string mClockFormat;
 
     void    updateClockDisplay();
+    void    updateLocalClockDisplay();
 // </FS:Zi>
 
     std::string mCurrentLocationString;

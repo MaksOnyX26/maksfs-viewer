@@ -901,6 +901,16 @@
 			 value="24 Hour TZ Seconds"/>
 		</combo_box>
 
+		<check_box
+         top_pad="8"
+         follows="left|top"
+         height="16"
+         left="10"
+         width="270"
+         label="Show local time"
+         name="MaksFSShowLocalTime"
+         control_name="MaksFSShowLocalTime"/>
+
 		<text
 		type="string"
 		length="1"
