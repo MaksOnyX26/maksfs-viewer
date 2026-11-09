@@ -130,7 +130,11 @@ jobs:
           path: ci-snapshot
       - name: Restore inputs and their provenance
         run: |
-          python -m zipfile -e ci-snapshot/packaging-inputs.zip .
+          if ('${{ steps.snapshot.outputs.run_id }}' -ne '') {
+            python -m zipfile -e ci-snapshot/packaging-inputs.zip .
+          } else {
+            python -c "import zipfile; z=zipfile.ZipFile('ci-snapshot/packaging-inputs.zip'); z.extract('packaging-inputs.json', '.')"
+          }
           if ($LASTEXITCODE -ne 0) { throw 'Snapshot extraction failed' }
           ./ci/check-open-profile.ps1 -CachePath build-vc170-64/CMakeCache.txt
       - name: Install pinned packaging Python tools

@@ -106,7 +106,7 @@ def main():
                     missing.append(f'{f.relative_to(STAGE)} -> architecture mismatch: {dep}')
             elif dep.startswith(('api-ms-win-','ext-ms-win-')):
                 resolution = 'Windows API set'
-            elif (system/dep).is_file() and not dep.startswith(('msvcp','vcruntime','msvcr','concrt')):
+            elif (system/dep).is_file() and (dep == 'msvcrt.dll' or not dep.startswith(('msvcp','vcruntime','msvcr','concrt'))):
                 resolution = 'Windows system DLL (runner); Windows 11 smoke test pending'
             else:
                 resolution = 'MISSING'
