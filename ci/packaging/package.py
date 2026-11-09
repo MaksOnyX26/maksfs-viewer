@@ -67,6 +67,10 @@ def nsi_quote(s):
 
 def main():
     OUT.mkdir(exist_ok=True)
+    # CEF child processes search their own directory for the VC++ runtime.
+    for pattern in ['msvcp140*.dll', 'vcruntime140*.dll', 'concrt140.dll']:
+        for runtime in STAGE.glob(pattern):
+            shutil.copy2(runtime, STAGE/'llplugin'/runtime.name)
     required = ['MaksFS.exe','slplugin.exe','llwebrtc.dll','msvcp140.dll','vcruntime140.dll',
       'licenses.txt','featuretable.txt','ca-bundle.crt','build_data.json',
       'app_settings/settings.xml','app_settings/message_template.msg',
@@ -110,7 +114,7 @@ def main():
             rows.append({'name':dep, 'resolved':resolution})
         dependencies.append({'file':f.relative_to(STAGE).as_posix(), 'machine':hex(machine),
                              'imports':rows, 'delay_imports':delayed})
-    report = {'source': json.loads((ROOT/'packaging-inputs.json').read_text()),
+    report = {'packaging_sha': os.environ.get('GITHUB_SHA'), 'source': json.loads((ROOT/'packaging-inputs.json').read_text()),
         'required_files':required, 'dependencies':dependencies, 'missing':missing,
         'runtime_test':'Not performed: requires interactive Windows 11 with GPU and SL login',
         'profile':'ReleaseFS_open; FMOD, KDU, Havok, OpenSim, signing and updater disabled'}
@@ -121,6 +125,10 @@ def main():
     binary_sha = report['source']['source_sha']
     for source in ['LICENSE','doc/LICENSE-source.txt','doc/LGPL-license.txt','doc/LICENSE-logos.txt']:
         shutil.copy2(ROOT/source, STAGE/Path(source).name)
+    notices = ROOT/'build-vc170-64/packages/LICENSES'
+    if notices.is_dir():
+        shutil.copytree(notices, STAGE/'third-party-licenses', dirs_exist_ok=True)
+    shutil.copy2(ROOT/'autobuild.xml', STAGE/'third-party-packages.xml')
     readme = f'''MaksFS {version} — Windows x64 experimental build\n
 Based on Firestorm. This is not an official Firestorm release.
 Source: https://github.com/MaksOnyX26/maksfs-viewer/tree/{binary_sha}

@@ -64,6 +64,17 @@ jobs:
             const selected = artifacts.filter(a => !a.expired && a.name.startsWith('maksfs-packaging-inputs-') &&
               a.workflow_run?.head_branch === 'maksfs-main').sort((a,b)=>b.id-a.id)[0];
             if (!selected && process.env.REQUESTED_RUN) throw new Error('Requested snapshot is missing/expired; refusing to compile');
+            if (selected && selected.workflow_run.head_sha !== context.sha) {
+              const compare = (await github.rest.repos.compareCommitsWithBasehead({owner,repo,
+                basehead: `${selected.workflow_run.head_sha}...${context.sha}`})).data;
+              const allowed = p => p.startsWith('ci/packaging/') ||
+                p === '.github/workflows/maksfs-package-windows.yml' ||
+                /^[^/]+\.md$/.test(p);
+              if (!['ahead','identical'].includes(compare.status) || !compare.files || compare.files.length >= 300 ||
+                  compare.files.some(f => !allowed(f.filename) || (f.previous_filename && !allowed(f.previous_filename)))) {
+                throw new Error('Source differs from saved binaries: refusing stale packaging. Review the source changes before compiling again.');
+              }
+            }
             core.setOutput('run_id', selected?.workflow_run.id || '');
             core.setOutput('name', selected?.name || '');
             await core.summary.addRaw(selected ? `Reusing binaries from run ${selected.workflow_run.id}. No compilation.` :
