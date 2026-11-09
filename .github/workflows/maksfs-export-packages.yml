@@ -1,0 +1,49 @@
+name: MaksFS export verified packages
+on:
+  push:
+    branches: [maksfs-main]
+    paths: ['.github/workflows/maksfs-export-packages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download already verified packages (no compile or repackaging)
+        uses: actions/download-artifact@v4
+        with:
+          name: MaksFS-Windows-x64-packages-42541181092
+          run-id: 42541181092
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Verify payload checksums before exporting
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS.txt
+      - name: Export installer separately
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MaksFS-7.2.5.81793-Windows-x64-Setup
+          path: dist/*-Setup.exe
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+      - name: Export portable separately
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MaksFS-7.2.5.81793-Windows-x64-Portable
+          path: dist/*-Portable.zip
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+      - name: Export verification reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MaksFS-7.2.5.81793-verification
+          path: |
+            dist/*.txt
+            dist/*.json
+          retention-days: 90
+          if-no-files-found: error
