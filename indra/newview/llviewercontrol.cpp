@@ -1093,6 +1093,14 @@ void handleSmallCameraFloaterChanged(const LLSD& newValue)
 // </FS:Ansariel>
 
 // <FS:Zi> FIRE-20390, FIRE-4269 - Option for 12/24 hour clock and seconds display
+void handleStatusbarLocalTimeChanged(const LLSD& newValue)
+{
+    if (gStatusBar)
+    {
+        gStatusBar->onShowLocalTimeChanged(newValue.asBoolean());
+    }
+}
+
 void handleStatusbarTimeformatChanged(const LLSD& newValue)
 {
     const std::string format = newValue.asString();
@@ -1574,6 +1582,7 @@ void settings_setup_listeners()
 
     // <FS:Zi> FIRE-20390, FIRE-4269 - Option for 12/24 hour clock and seconds display
     setting_setup_signal_listener(gSavedSettings, "FSStatusBarTimeFormat", handleStatusbarTimeformatChanged);
+    setting_setup_signal_listener(gSavedSettings, "MaksFSShowLocalTime", handleStatusbarLocalTimeChanged);
 
     // <FS:Zi> Run Prio 0 default bento pose in the background to fix splayed hands, open mouths, etc.
     setting_setup_signal_listener(gSavedSettings, "FSPlayDefaultBentoAnimation", handlePlayBentoIdleAnimationChanged);

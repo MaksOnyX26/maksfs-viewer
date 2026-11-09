@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <panel name="status">
+    <panel.string name="localTimeTooltip">Местное время: [TIME]</panel.string>
 	<panel name="parcel_info_panel">
 		<button name="buy_land_btn" tool_tip="Участок для продажи"/>
 		<text tool_tip="Имя земельного участка, на котором вы стоите. Нажмите о земле." name="parcel_info_text" value="(загрузка...)"/>
