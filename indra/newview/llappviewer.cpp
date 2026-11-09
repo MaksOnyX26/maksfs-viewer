@@ -28,6 +28,11 @@
 
 #include "llappviewer.h"
 
+// <FS:MaksFS> Allocation counters used by optional frame diagnostics.
+#include "llimagegl.h"
+#include "llvertexbuffer.h"
+// </FS:MaksFS>
+
 // Viewer includes
 #include "llversioninfo.h"
 #include "llfeaturemanager.h"
@@ -1568,6 +1573,57 @@ bool LLAppViewer::frame()
     return ret;
 }
 
+// <FS:MaksFS> Bounded, opt-in CPU wall-time diagnostics. No GPU queries,
+// per-frame logging, retained texture references or OS memory polling.
+namespace
+{
+struct MaksFSFrameDiagnostics
+{
+    U32 frames = 0;
+    U32 slow_frames = 0;
+    F64 elapsed = 0.0;
+    F64 max_frame = 0.0;
+    F64 sum[4] = {};
+    F64 maximum[4] = {};
+
+    void record(F64 idle, F64 display, F64 post_display, F64 background)
+    {
+        const F64 phases[] = {idle, display, post_display, background};
+        const F64 total = idle + display + post_display + background;
+        ++frames;
+        slow_frames += total >= 0.050;
+        elapsed += total;
+        max_frame = llmax(max_frame, total);
+        for (U32 i = 0; i < 4; ++i)
+        {
+            sum[i] += phases[i];
+            maximum[i] = llmax(maximum[i], phases[i]);
+        }
+        if (elapsed < 5.0)
+        {
+            return;
+        }
+
+        LL_INFOS("MaksFSPerformance")
+            << "frames=" << frames << " slow_ge_50ms=" << slow_frames
+            << " mean_ms=" << elapsed * 1000.0 / frames
+            << " max_ms=" << max_frame * 1000.0
+            << " idle_mean_max_ms=" << sum[0] * 1000.0 / frames << "/" << maximum[0] * 1000.0
+            << " display_mean_max_ms=" << sum[1] * 1000.0 / frames << "/" << maximum[1] * 1000.0
+            << " post_display_mean_max_ms=" << sum[2] * 1000.0 / frames << "/" << maximum[2] * 1000.0
+            << " background_mean_max_ms=" << sum[3] * 1000.0 / frames << "/" << maximum[3] * 1000.0
+            << " texture_mib=" << LLImageGL::getTextureBytesAllocated() / (1024.0 * 1024.0)
+            << " vertex_mib=" << LLVertexBuffer::getBytesAllocated() / (1024.0 * 1024.0)
+            << " discard_bias=" << LLViewerTexture::sDesiredDiscardBias
+            << " create_pending=" << gTextureList.mCreateTextureList.size()
+            << " downscale_pending=" << gTextureList.mDownScaleQueue.size()
+            << LL_ENDL;
+        *this = MaksFSFrameDiagnostics();
+    }
+};
+}
+// </FS:MaksFS>
+
 bool LLAppViewer::doFrame()
 {
     resumeMainloopTimeout("Main:doFrameStart");
@@ -1596,6 +1652,17 @@ bool LLAppViewer::doFrame()
     LLEventPump& mainloop(LLEventPumps::instance().obtain("mainloop"));
     LLSD newFrame;
     LLTimer frameTimer; // <FS:Beq/> relocated - <FS:Ansariel> FIRE-22297: FPS limiter not working properly on Mac/Linux
+    // <FS:MaksFS> Snapshot the toggle once so mid-frame edits cannot mix samples.
+    static LLCachedControl<bool> diagnostics_enabled(gSavedSettings, "MaksFSFrameDiagnostics", false);
+    static MaksFSFrameDiagnostics diagnostics;
+    const bool diagnose_frame = diagnostics_enabled && LLStartUp::getStartupState() == STATE_STARTED;
+    F64 diagnostic_display_start = 0.0;
+    F64 diagnostic_display_end = 0.0;
+    if (!diagnose_frame && diagnostics.frames != 0)
+    {
+        diagnostics = MaksFSFrameDiagnostics();
+    }
+    // </FS:MaksFS>
     {
         LLPerfStats::RecordSceneTime T (LLPerfStats::StatType_t::RENDER_IDLE); // perf stats
 // <FS:Beq> profiling enablement.
@@ -1780,7 +1847,13 @@ bool LLAppViewer::doFrame()
                 pingMainloopTimeout("Main:Display");
                 gGLActive = true;
 
+                // <FS:MaksFS>
+                if (diagnose_frame) diagnostic_display_start = frameTimer.getElapsedTimeF64();
+                // </FS:MaksFS>
                 display();
+                // <FS:MaksFS>
+                if (diagnose_frame) diagnostic_display_end = frameTimer.getElapsedTimeF64();
+                // </FS:MaksFS>
 
                 if (LLStartUp::getStartupState() == STATE_STARTED) // <FS:Beq/> FIRE-34590 - Bugsplat caused by updating maps before world is loaded.
                 {
@@ -1809,6 +1882,9 @@ bool LLAppViewer::doFrame()
             pauseMainloopTimeout();
         }
 
+        // <FS:MaksFS> Includes reflection probes and snapshot work after display().
+        const F64 diagnostic_work_end = diagnose_frame ? frameTimer.getElapsedTimeF64() : 0.0;
+        // </FS:MaksFS>
         // Sleep and run background threads
         {
             //LL_RECORD_BLOCK_TIME(SLEEP2);
@@ -1924,6 +2000,18 @@ bool LLAppViewer::doFrame()
                     ms_sleep(milliseconds_to_sleep);
                 }
             }
+            // <FS:MaksFS> Background includes worker servicing and deliberate
+            // sleeps (FPS limit, loss of focus, I/O backlog); it is not GPU time.
+            if (diagnose_frame)
+            {
+                const F64 total = frameTimer.getElapsedTimeF64();
+                const bool displayed = diagnostic_display_end > 0.0;
+                diagnostics.record(displayed ? diagnostic_display_start : diagnostic_work_end,
+                    diagnostic_display_end - diagnostic_display_start,
+                    displayed ? diagnostic_work_end - diagnostic_display_end : 0.0,
+                    total - diagnostic_work_end);
+            }
+            // </FS:MaksFS>
             frameTimer.reset();
             // </FS:Ansariel>
             {
