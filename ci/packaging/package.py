@@ -67,6 +67,14 @@ def nsi_quote(s):
 
 def main():
     OUT.mkdir(exist_ok=True)
+    source = json.loads((ROOT/'packaging-inputs.json').read_text())
+    expected = os.environ.get('SOURCE_SHA')
+    if expected and (source['source_sha'] != expected or
+                     source['run_id'] != os.environ['GITHUB_RUN_ID'] or
+                     source.get('workflow_sha') != os.environ['GITHUB_SHA'] or
+                     source.get('fresh_compile') is not True):
+        raise RuntimeError('Refusing stale or mismatched build inputs')
+    (STAGE/'BUILD-PROVENANCE.json').write_text(json.dumps(source, indent=2), encoding='utf-8')
     # CEF child processes search their own directory for the VC++ runtime.
     for pattern in ['msvcp140*.dll', 'vcruntime140*.dll', 'concrt140.dll']:
         for runtime in STAGE.glob(pattern):
@@ -114,7 +122,7 @@ def main():
             rows.append({'name':dep, 'resolved':resolution})
         dependencies.append({'file':f.relative_to(STAGE).as_posix(), 'machine':hex(machine),
                              'imports':rows, 'delay_imports':delayed})
-    report = {'packaging_sha': os.environ.get('GITHUB_SHA'), 'source': json.loads((ROOT/'packaging-inputs.json').read_text()),
+    report = {'packaging_sha': os.environ.get('GITHUB_SHA'), 'source': source,
         'required_files':required, 'dependencies':dependencies, 'missing':missing,
         'runtime_test':'Not performed: requires interactive Windows 11 with GPU and SL login',
         'profile':'ReleaseFS_open; FMOD, KDU, Havok, OpenSim, signing and updater disabled'}
@@ -133,7 +141,7 @@ def main():
 Based on Firestorm. This is not an official Firestorm release.
 Source: https://github.com/MaksOnyX26/maksfs-viewer/tree/{binary_sha}
 Profile: ReleaseFS_open. FMOD, KDU, Havok and OpenSim are disabled.
-Performance improvements have not yet been implemented or measured.
+Performance improvements have not been measured.
 The EXE is unsigned. Windows 11 interactive/GPU/login/voice/media tests are pending.
 
 PORTABLE: Extract the entire ZIP into a writable folder and run MaksFS-Portable.cmd.
