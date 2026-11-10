@@ -364,6 +364,14 @@ void LLViewerTextureList::shutdown()
         mCreateTextureList.front()->mCreatePending = false;
         mCreateTextureList.pop();
     }
+    // <FS:MaksFS> The downscale queue also owns texture references. Release
+    // them before clearing the lists, without processing queued downscales.
+    while (!mDownScaleQueue.empty())
+    {
+        mDownScaleQueue.front()->mDownScalePending = false;
+        mDownScaleQueue.pop();
+    }
+    // </FS:MaksFS>
     mFastCacheList.clear();
 
     mUUIDMap.clear();
@@ -1185,7 +1193,11 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
         // freeze.
         S32 min_count = (S32)mCreateTextureList.size() / 20 + 5;
 
-        create_timer.reset();
+        // <FS:MaksFS> Preserve total elapsed time for the caller; keep the
+        // existing independent downscale budget and emergency minimum work.
+        // create_timer.reset();
+        LLTimer downscale_timer;
+        // </FS:MaksFS>
         while (!mDownScaleQueue.empty())
         {
             LLViewerFetchedTexture* image = mDownScaleQueue.front();
@@ -1200,7 +1212,10 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
             image->mDownScalePending = false;
             mDownScaleQueue.pop();
 
-            if (create_timer.getElapsedTimeF32() > max_time && --min_count <= 0)
+            // <FS:MaksFS>
+            // if (create_timer.getElapsedTimeF32() > max_time && --min_count <= 0)
+            if (downscale_timer.getElapsedTimeF32() > max_time && --min_count <= 0)
+            // </FS:MaksFS>
             {
                 break;
             }
@@ -1369,6 +1384,9 @@ void LLViewerTextureList::decodeAllImages(F32 max_time)
 
     // Update texture stats and priorities
     std::vector<LLPointer<LLViewerFetchedTexture> > image_list;
+    // <FS:MaksFS> Avoid repeated allocations while taking this local snapshot.
+    image_list.reserve(mImageList.size());
+    // </FS:MaksFS>
     for (image_list_t::iterator iter = mImageList.begin();
          iter != mImageList.end(); )
     {
