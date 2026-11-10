@@ -194,6 +194,7 @@
      name="time">
         [hour12, datetime, slt]:[min, datetime, slt]:[second, datetime, slt] [ampm, datetime, slt] [timezone,datetime, slt]
     </panel.string>
+    <panel.string name="localTimeTooltip">Local time: [TIME]</panel.string>
     <panel.string
      name="timeTooltip">
         [weekday, datetime, slt], [day, datetime, slt] [month, datetime, slt] [year, datetime, slt]
@@ -469,5 +470,18 @@
      wrap="false">
         200.0
     </text>
+    <text
+     name="LocalTimeText"
+     font="Tabnum"
+     text_color="TimeTextColor"
+     follows="right|top"
+     halign="center"
+     height="16"
+     h_pad="2"
+     top="3"
+     left="0"
+     width="42"
+     visible="false"
+     wrap="false">00:00</text>
   </panel>
 </panel>
