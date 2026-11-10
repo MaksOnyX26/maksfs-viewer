@@ -632,7 +632,7 @@ void LLStatusBar::updateLocalClockDisplay()
     {
         return;
     }
-    mTextLocalTime->setText(clock);
+    mTextLocalTime->setText(LLStringExplicit(clock));
     LLStringUtil::format_map_t args;
     args["[TIME]"] = date;
     mTextLocalTime->setToolTip(getString("localTimeTooltip", args));
