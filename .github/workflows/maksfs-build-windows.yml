@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/maksfs-main' && inputs.confirm_build
+    # Temporary integration branch; retain manual opt-in and the main-branch path.
+    if: (github.ref == 'refs/heads/maksfs-main' || github.ref == 'refs/heads/codex/integration-pr1-pr2-20261110') && inputs.confirm_build
     runs-on: windows-2022
     timeout-minutes: 150
     env:
