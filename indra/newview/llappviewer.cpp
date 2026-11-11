@@ -1883,7 +1883,7 @@ bool LLAppViewer::doFrame()
         }
 
         // <FS:MaksFS> Includes reflection probes and snapshot work after display().
-        const F64 diagnostic_work_end = diagnose_frame ? frameTimer.getElapsedTimeF64() : 0.0;
+        const F64 diagnostic_work_end = diagnose_frame ? frameTimer.getElapsedTimeF64().value() : 0.0;
         // </FS:MaksFS>
         // Sleep and run background threads
         {
