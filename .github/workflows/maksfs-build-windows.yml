@@ -19,11 +19,11 @@ concurrency:
 jobs:
   build:
     # This branch permits one explicitly confirmed attempt; reruns must not recompile.
-    if: github.ref == 'refs/heads/codex/integration-windows-retest-20261111' && inputs.confirm_build && github.run_attempt == 1
+    if: github.ref == 'refs/heads/codex/integration-windows-retest2-20261111' && inputs.confirm_build && github.run_attempt == 1
     runs-on: windows-2022
     timeout-minutes: 180
     env:
-      SOURCE_SHA: c90b41cc62ef16e21bcb581b62f7f248d991c144
+      SOURCE_SHA: aa9cf36c89b67e5a01f96acf74b9108241d2492a
       WORKFLOW_SHA: ${{ github.sha }}
       AUTOBUILD_VSVER: '170'
       AUTOBUILD_ADDRSIZE: '64'
@@ -40,7 +40,7 @@ jobs:
       - name: Checkout the exact integration source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: c90b41cc62ef16e21bcb581b62f7f248d991c144
+          ref: aa9cf36c89b67e5a01f96acf74b9108241d2492a
           persist-credentials: false
           fetch-depth: 0
 
